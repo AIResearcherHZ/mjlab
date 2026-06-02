@@ -1,0 +1,94 @@
+================================================================================
+                              仓库与环境
+================================================================================
+git clone https://github.com/mujocolab/mjlab.git && cd mjlab
+conda activate mjlab
+python -m mjlab.scripts.demo        # 免安装试用
+
+
+================================================================================
+                              已注册任务
+================================================================================
+python src/mjlab/scripts/list_envs.py
+
+# task_id                                              experiment_name
+# Mjlab-Cartpole-Balance / Mjlab-Cartpole-Swingup      cartpole
+# Mjlab-Velocity-Flat-Unitree-G1                       g1_velocity
+# Mjlab-Velocity-Rough-Unitree-G1                      g1_velocity
+# Mjlab-Velocity-Flat-Unitree-Go1                      go1_velocity
+# Mjlab-Velocity-Rough-Unitree-Go1                     go1_velocity
+# Mjlab-Tracking-Flat-Unitree-G1                       g1_tracking
+# Mjlab-Tracking-Flat-Unitree-G1-No-State-Estimation   g1_tracking
+# Mjlab-Lift-Cube-Yam                                  yam_lift_cube
+# Mjlab-Lift-Cube-Yam-Rgb / -Depth                     yam_lift_cube_vision
+# Mjlab-Multi-Cube-Seg-Yam                             yam_multi_cube_seg
+# Mjlab-Reach-Halfbody-Semi-Taks-T1                    semi_taks_t1_halfbody_reach   (20 DoF)
+# Mjlab-Reach-Bi-Arms-Semi-Taks-T1                     semi_taks_t1_bi_arms_reach    (14 DoF)
+# Mjlab-Reach-Right-Arm-Semi-Taks-T1                   semi_taks_t1_right_arm_reach  (7 DoF)
+
+
+================================================================================
+                          通用工作流（所有 task_id）
+================================================================================
+# 训练（默认 TensorBoard + 录像；需 MUJOCO_GL=egl）
+python src/mjlab/scripts/train.py <TASK> \
+  --env.scene.num-envs 4096 \
+  --agent.logger tensorboard \
+  --video True
+
+# TensorBoard
+tensorboard --logdir logs/rsl_rl/<experiment_name> --host 0.0.0.0 --port 6006
+
+# 播放
+python src/mjlab/scripts/play.py <TASK> --wandb-run-path ORG/PROJ/RUN
+# 替代源：--checkpoint-file PATH 本地 | --agent zero|random 自检 | --viewer viser 浏览器 | --no-terminations 关终止
+
+
+================================================================================
+                          Tracking 任务专属
+================================================================================
+# 动作二选一：--registry-name 从 W&B 拉 / --env.commands.motion.motion-file 指定本地 npz
+python src/mjlab/tasks/tracking/scripts/evaluate.py \
+  --wandb-run-path ORG/PROJ/RUN
+
+# 仅看参考动作（不训练）
+python src/mjlab/scripts/play.py Mjlab-Tracking-Flat-Unitree-G1 \
+  --agent zero --registry-name ORG/motions/NAME --no-terminations
+
+
+================================================================================
+              Semi_Taks_T1 - RL-IK Reach 三变体
+================================================================================
+# 训练（<TASK> 换上面三个 Reach ID 之一；多卡加 --gpu-ids "[0, 1]"）
+python src/mjlab/scripts/train.py <TASK> \
+  --env.scene.num-envs 1 \
+  --agent.logger tensorboard \
+  --video True
+
+# 播放（红 sphere=左手目标，绿 sphere=右手目标）
+python src/mjlab/scripts/play.py <TASK> --wandb-run-path ORG/PROJ/RUN
+
+# 单独查看机器人 / 重算工作空间
+python -m mjlab.asset_zoo.robots.semi_taks_t1.semi_taks_t1_constants
+python src/mjlab/asset_zoo/robots/semi_taks_t1/tools/compute_reach.py
+
+
+================================================================================
+                              辅助脚本
+================================================================================
+python src/mjlab/scripts/export_scene.py <TASK> --output-dir ./exported_scene
+python src/mjlab/scripts/visualize_terrain.py
+python scripts/tools/render_terrain_gallery.py
+python src/mjlab/scripts/nan_viz.py --dump-dir logs/nan_dumps
+python src/mjlab/scripts/csv_to_npz.py --input motion.csv --output motion.npz
+python src/mjlab/scripts/gcs.py --help
+
+
+================================================================================
+                              性能基准 / Docker
+================================================================================
+python scripts/benchmarks/measure_throughput.py \
+  --task Mjlab-Velocity-Flat-Unitree-G1 --num-envs 4096
+python scripts/benchmarks/generate_report.py
+
+docker build -t mjlab:latest . && bash scripts/run_docker.sh
